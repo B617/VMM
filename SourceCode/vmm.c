@@ -432,6 +432,20 @@ void do_print_auxMem()
 	}
 }
 
+/* 打印实存相关信息 */
+void do_print_actMem()
+{
+	int i,j,k;
+	printf("页号\t内容\t\n");
+	for(i=0,k=0;i<BLOCK_SUM;i++){
+		printf("%d\t",i);
+		for(j=0;j<PAGE_SIZE;j++){
+			printf("%c",actMem[k++]);
+		}
+		printf("\n");
+	}
+}
+
 /* 获取页面保护类型字符串 */
 char *get_proType_str(char *str, BYTE type)
 {
@@ -470,12 +484,14 @@ int main(int argc, char* argv[])
 	{
 		do_request();
 		do_response();
-		printf("按Y打印页表，按V打印辅存,按其他键不打印...\n");
+		printf("按Y打印页表，按V打印辅存,按A打印实存,按其他键不打印...\n");
 		c=getchar();
 		if (c == 'y' || c == 'Y')
 			do_print_info();
 		else if(c == 'v' || c == 'V')
 			do_print_auxMem();
+		else if(c == 'a' || c == 'A')
+			do_print_actMem();
 		while (c != '\n')
 			c = getchar();
 		printf("按X退出程序，按其他键继续...\n");
