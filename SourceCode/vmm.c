@@ -69,7 +69,7 @@ void do_init()
 				break;
 		}
 		/* 设置该页对应的辅存地址 */
-		pageTable[i].auxAddr = i * PAGE_SIZE * 2;
+		pageTable[i].auxAddr = i * PAGE_SIZE;//@remove *2
 	}
 	for (j = 0; j < BLOCK_SUM; j++)
 	{
@@ -248,7 +248,7 @@ void do_LFU(Ptr_PageTableItem ptr_pageTabIt)
 void do_page_in(Ptr_PageTableItem ptr_pageTabIt, unsigned int blockNum)
 {
 	unsigned int readNum;
-	if (fseek(ptr_auxMem, ptr_pageTabIt->auxAddr, SEEK_SET) < 0)
+	if (fseek(ptr_auxMem, ptr_pageTabIt->auxAddr, SEEK_SET) < 0)//从文件头偏移
 	{
 #ifdef DEBUG
 		printf("DEBUG: auxAddr=%u\tftell=%u\n", ptr_pageTabIt->auxAddr, ftell(ptr_auxMem));
