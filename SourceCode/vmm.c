@@ -405,6 +405,33 @@ void do_print_info()
 	}
 }
 
+/* 打印辅存相关信息 */
+void do_print_auxMem()
+{
+	int i,j,k,readNum;
+	BYTE temp[VIRTUAL_MEMORY_SIZE];
+	if (fseek(ptr_auxMem, 0, SEEK_SET) < 0)//从文件头偏移
+	{
+		do_error(ERROR_FILE_SEEK_FAILED);
+		exit(1);
+	}
+	if ((readNum = fread(temp, 
+		sizeof(BYTE), VIRTUAL_MEMORY_SIZE, ptr_auxMem)) < VIRTUAL_MEMORY_SIZE)
+	{
+		do_error(ERROR_FILE_READ_FAILED);
+		exit(1);
+	}
+	printf("页号\t内容\t\n");
+	for(i=0,k=0;i<PAGE_SUM;i++)
+	{
+		printf("%d\t",i);
+		for(j=0;j<PAGE_SIZE;j++){
+			printf("%c",temp[k++]);
+		}
+		printf("\n");
+	}
+}
+
 /* 获取页面保护类型字符串 */
 char *get_proType_str(char *str, BYTE type)
 {
@@ -443,9 +470,12 @@ int main(int argc, char* argv[])
 	{
 		do_request();
 		do_response();
-		printf("按Y打印页表，按其他键不打印...\n");
-		if ((c = getchar()) == 'y' || c == 'Y')
+		printf("按Y打印页表，按V打印辅存,按其他键不打印...\n");
+		c=getchar();
+		if (c == 'y' || c == 'Y')
 			do_print_info();
+		else if(c == 'v' || c == 'V')
+			do_print_auxMem();
 		while (c != '\n')
 			c = getchar();
 		printf("按X退出程序，按其他键继续...\n");

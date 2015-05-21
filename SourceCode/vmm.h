@@ -106,6 +106,12 @@ void do_error(ERROR_CODE);
 /* 打印页表相关信息 */
 void do_print_info();
 
+/* 打印辅存相关信息 */
+void do_print_auxMem();
+
+/* 打印实存相关信息 */
+void do_print_actMem();
+
 /* 获取页面保护类型字符串 */
 char *get_proType_str(char *, BYTE);
 
