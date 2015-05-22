@@ -6,7 +6,9 @@
 //#define WRITE
 
 /* 页表 */
-PageTableItem pageTable[PAGE_SUM];
+//PageTableItem pageTable[PAGE_SUM];
+/* 二级页表 */
+PageTableItem pageTable[ROOT_PAGE_SUM][SUB_PAGE_SUM];
 /* 实存空间 */
 BYTE actMem[ACTUAL_MEMORY_SIZE];
 /* 用文件模拟辅存空间 */
@@ -21,70 +23,77 @@ Ptr_MemoryAccessRequest ptr_memAccReq;
 /* 初始化环境 */
 void do_init()
 {
-	int i, j;
+	int i, j ,k;
+	unsigned long auxAddr=0;
 	srandom(time(NULL));
-	for (i = 0; i < PAGE_SUM; i++)
+	for (i=0; i < ROOT_PAGE_SUM; i++)
 	{
-		pageTable[i].pageNum = i;
-		pageTable[i].filled = FALSE;
-		pageTable[i].edited = FALSE;
-		pageTable[i].count = 0;
-		/* 使用随机数设置该页的保护类型 */
-		switch (random() % 7)
+		for (j = 0; j < SUB_PAGE_SUM; j++)
 		{
-			case 0:
+			pageTable[i][j].pageNum = j;
+			pageTable[i][j].filled = FALSE;
+			pageTable[i][j].edited = FALSE;
+			pageTable[i][j].count = 0;
+			/* 使用随机数设置该页的保护类型 */
+			switch (random() % 7)
 			{
-				pageTable[i].proType = READABLE;
-				break;
+				case 0:
+				{
+					pageTable[i][j].proType = READABLE;
+					break;
+				}
+				case 1:
+				{
+					pageTable[i][j].proType = WRITABLE;
+					break;
+				}
+				case 2:
+				{
+					pageTable[i][j].proType = EXECUTABLE;
+					break;
+				}
+				case 3:
+				{
+					pageTable[i][j].proType = READABLE | WRITABLE;
+					break;
+				}
+				case 4:
+				{
+					pageTable[i][j].proType = READABLE | EXECUTABLE;
+					break;
+				}
+				case 5:
+				{
+					pageTable[i][j].proType = WRITABLE | EXECUTABLE;
+					break;
+				}
+				case 6:
+				{
+					pageTable[i][j].proType = READABLE | WRITABLE | EXECUTABLE;
+					break;
+				}
+				default:
+					break;
 			}
-			case 1:
-			{
-				pageTable[i].proType = WRITABLE;
-				break;
-			}
-			case 2:
-			{
-				pageTable[i].proType = EXECUTABLE;
-				break;
-			}
-			case 3:
-			{
-				pageTable[i].proType = READABLE | WRITABLE;
-				break;
-			}
-			case 4:
-			{
-				pageTable[i].proType = READABLE | EXECUTABLE;
-				break;
-			}
-			case 5:
-			{
-				pageTable[i].proType = WRITABLE | EXECUTABLE;
-				break;
-			}
-			case 6:
-			{
-				pageTable[i].proType = READABLE | WRITABLE | EXECUTABLE;
-				break;
-			}
-			default:
-				break;
+			/* 设置该页对应的辅存地址 */
+			pageTable[i][j].auxAddr = auxAddr;
+			auxAddr += PAGE_SIZE;				//@remove *2
 		}
-		/* 设置该页对应的辅存地址 */
-		pageTable[i].auxAddr = i * PAGE_SIZE;//@remove *2
 	}
-	for (j = 0; j < BLOCK_SUM; j++)
+	for (k = 0; k < BLOCK_SUM; k++)
 	{
 		/* 随机选择一些物理块进行页面装入 */
 		if (random() % 2 == 0)
 		{
-			do_page_in(&pageTable[j], j);
-			pageTable[j].blockNum = j;
-			pageTable[j].filled = TRUE;
-			blockStatus[j] = TRUE;
+			i=random() % ROOT_PAGE_SUM;
+			j=random() % SUB_PAGE_SUM;
+			do_page_in(&pageTable[i][j], k);
+			pageTable[i][j].blockNum = k;
+			pageTable[i][j].filled = TRUE;
+			blockStatus[k] = TRUE;
 		}
 		else
-			blockStatus[j] = FALSE;
+			blockStatus[k] = FALSE;
 	}
 }
 
@@ -110,7 +119,7 @@ void initFile(){
 void do_response()
 {
 	Ptr_PageTableItem ptr_pageTabIt;
-	unsigned int pageNum, offAddr;
+	unsigned int rootPageNum, subPageNum, offAddr, temp;
 	unsigned int actAddr;
 	
 	/* 检查地址是否越界 */
@@ -121,12 +130,14 @@ void do_response()
 	}
 	
 	/* 计算页号和页内偏移值 */
-	pageNum = ptr_memAccReq->virAddr / PAGE_SIZE;
+	temp = PAGE_SIZE * SUB_PAGE_SUM;
+	rootPageNum = ptr_memAccReq->virAddr / temp;
+	subPageNum = ptr_memAccReq->virAddr % temp / PAGE_SIZE;
 	offAddr = ptr_memAccReq->virAddr % PAGE_SIZE;
-	printf("页号为：%u\t页内偏移为：%u\n", pageNum, offAddr);
+	printf("一级页号为：%u\t二级页号为：%u\t页内偏移为：%u\n", rootPageNum, subPageNum, offAddr);
 
 	/* 获取对应页表项 */
-	ptr_pageTabIt = &pageTable[pageNum];
+	ptr_pageTabIt = &pageTable[rootPageNum][subPageNum];
 	
 	/* 根据特征位决定是否产生缺页中断 */
 	if (!ptr_pageTabIt->filled)
@@ -220,32 +231,36 @@ void do_page_fault(Ptr_PageTableItem ptr_pageTabIt)
 /* 根据LFU算法进行页面替换 */
 void do_LFU(Ptr_PageTableItem ptr_pageTabIt)
 {
-	unsigned int i, min, page;
+	unsigned int i, j, min, page_i, page_j;
 	printf("没有空闲物理块，开始进行LFU页面替换...\n");
-	for (i = 0, min = 0xFFFFFFFF, page = 0; i < PAGE_SUM; i++)
+	for (i = 0, min = 0xFFFFFFFF, page_i = 0, page_j = 0; i < ROOT_PAGE_SUM; i++)
 	{
-		if (pageTable[i].count < min)
+		for(j = 0; j < SUB_PAGE_SUM; j++)
 		{
-			min = pageTable[i].count;
-			page = i;
+			if (pageTable[i][j].filled=TRUE && pageTable[i][j].count < min)
+			{
+				min = pageTable[i][j].count;
+				page_i = i;
+				page_j = j;
+			}
 		}
 	}
-	printf("选择第%u页进行替换\n", page);
-	if (pageTable[page].edited)
+	printf("选择一级页表第%u项,二级页表第%u项进行替换\n", page_i, page_j);
+	if (pageTable[page_i][page_j].edited)
 	{
 		/* 页面内容有修改，需要写回至辅存 */
 		printf("该页内容有修改，写回至辅存\n");
-		do_page_out(&pageTable[page]);
+		do_page_out(&pageTable[page_i][page_j]);
 	}
-	pageTable[page].filled = FALSE;
-	pageTable[page].count = 0;
+	pageTable[page_i][page_j].filled = FALSE;
+	pageTable[page_i][page_j].count = 0;
 
 
 	/* 读辅存内容，写入到实存 */
-	do_page_in(ptr_pageTabIt, pageTable[page].blockNum);
+	do_page_in(ptr_pageTabIt, pageTable[page_i][page_j].blockNum);
 	
 	/* 更新页表内容 */
-	ptr_pageTabIt->blockNum = pageTable[page].blockNum;
+	ptr_pageTabIt->blockNum = pageTable[page_i][page_j].blockNum;
 	ptr_pageTabIt->filled = TRUE;
 	ptr_pageTabIt->edited = FALSE;
 	ptr_pageTabIt->count = 0;
@@ -443,21 +458,24 @@ void create_request()
 /* 打印页表 */
 void do_print_info()
 {
-	unsigned int i, j, k;
+	unsigned int i, j;
 	char str[4];
-	printf("页号\t块号\t装入\t修改\t保护\t计数\t辅存\n");
-	for (i = 0; i < PAGE_SUM; i++)
+	printf("1级页号\t2级页号\t块号\t装入\t修改\t保护\t计数\t辅存\n");
+	for (i = 0; i < ROOT_PAGE_SUM; i++)
 	{
-		printf("%u\t%u\t%u\t%u\t%s\t%u\t%u\n", i, pageTable[i].blockNum, pageTable[i].filled, 
-			pageTable[i].edited, get_proType_str(str, pageTable[i].proType), 
-			pageTable[i].count, pageTable[i].auxAddr);
+		for(j = 0; j < SUB_PAGE_SUM; j++)
+		{
+			printf("%u\t%u\t%u\t%u\t%u\t%s\t%u\t%u\n", i, j, pageTable[i][j].blockNum, pageTable[i][j].filled, 
+				pageTable[i][j].edited, get_proType_str(str, pageTable[i][j].proType), 
+				pageTable[i][j].count, pageTable[i][j].auxAddr);
+		}
 	}
 }
 
 /* 打印辅存相关信息 */
 void do_print_auxMem()
 {
-	int i,j,k,readNum;
+	int i,j,k,readNum,p;
 	BYTE temp[VIRTUAL_MEMORY_SIZE];
 	if (fseek(ptr_auxMem, 0, SEEK_SET) < 0)//从文件头偏移
 	{
@@ -470,14 +488,17 @@ void do_print_auxMem()
 		do_error(ERROR_FILE_READ_FAILED);
 		exit(1);
 	}
-	printf("页号\t内容\t\n");
-	for(i=0,k=0;i<PAGE_SUM;i++)
+	printf("1级页号\t2级页号\t内容\t\n");
+	for(i=0,k=0;i<ROOT_PAGE_SUM;i++)
 	{
-		printf("%d\t",i);
-		for(j=0;j<PAGE_SIZE;j++){
-			printf("%02x ",temp[k++]);
+		for(p=0;p<SUB_PAGE_SUM;p++)
+		{
+			printf("%d\t%d\t",i,p);
+			for(j=0;j<PAGE_SIZE;j++){
+				printf("%02x ",temp[k++]);
+			}
+			printf("\n");
 		}
-		printf("\n");
 	}
 }
 

@@ -18,6 +18,10 @@
 #define ACTUAL_MEMORY_SIZE (32 * 4)
 /* 总虚页数 */
 #define PAGE_SUM (VIRTUAL_MEMORY_SIZE / PAGE_SIZE)
+/* 一级页表项数 */
+#define ROOT_PAGE_SUM 4
+/* 二级页表项数 */
+#define SUB_PAGE_SUM (PAGE_SUM / ROOT_PAGE_SUM)
 /* 总物理块数 */
 #define BLOCK_SUM (ACTUAL_MEMORY_SIZE / PAGE_SIZE)
 
