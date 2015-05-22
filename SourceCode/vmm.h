@@ -85,6 +85,9 @@ typedef enum {
 /* 产生访存请求 */
 void do_request();
 
+/* 手动产生访存请求 */
+void create_request();
+
 /* 响应访存请求 */
 void do_response();
 

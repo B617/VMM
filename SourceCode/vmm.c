@@ -400,6 +400,46 @@ void do_request()
 	}	
 }
 
+/* 手动产生访存请求 */
+void create_request()
+{
+	unsigned long addr;
+	int type;
+	BYTE value;
+	printf("请输入请求地址[0,%u)...\n",VIRTUAL_MEMORY_SIZE);
+	/* 产生请求地址 */
+	scanf("%u",&ptr_memAccReq->virAddr);
+	/* 产生请求类型 */
+	printf("请输入请求类型,0:read  1:write  2:execute\n");
+	scanf("%d",&type);
+	switch (type%3)
+	{
+		case 0: //读请求
+		{
+			ptr_memAccReq->reqType = REQUEST_READ;
+			printf("产生请求：\n地址：%u\t类型：读取\n", ptr_memAccReq->virAddr);
+			break;
+		}
+		case 1: //写请求
+		{
+			ptr_memAccReq->reqType = REQUEST_WRITE;
+			/* 产生待写入的值 */
+			printf("请输入待写入的值...\n");
+			scanf("%02x",&ptr_memAccReq->value);
+			printf("产生请求：\n地址：%u\t类型：写入\t值：%02X\n", ptr_memAccReq->virAddr, ptr_memAccReq->value);
+			break;
+		}
+		case 2:
+		{
+			ptr_memAccReq->reqType = REQUEST_EXECUTE;
+			printf("产生请求：\n地址：%u\t类型：执行\n", ptr_memAccReq->virAddr);
+			break;
+		}
+		default:
+			break;
+	}	
+}
+
 /* 打印页表 */
 void do_print_info()
 {
@@ -492,7 +532,7 @@ int main(int argc, char* argv[])
 	/* 在循环中模拟访存请求与处理过程 */
 	while (TRUE)
 	{
-		printf("按Y打印页表，按V打印辅存,按A打印实存,按N产生新请求,按X退出程序...\n");
+		printf("按Y打印页表，按V打印辅存,按A打印实存\n按C手动产生请求,按N随机产生新请求,按X退出程序...\n");
 		c=getchar();
 		if (c == 'y' || c == 'Y')
 			do_print_info();
@@ -502,6 +542,10 @@ int main(int argc, char* argv[])
 			do_print_actMem();
 		else if(c == 'n' || c == 'N'){
 			do_request();
+			do_response();
+		}
+		else if(c == 'c' || c == 'C'){
+			create_request();
 			do_response();
 		}
 		else if(c == 'x' || c == 'X')
