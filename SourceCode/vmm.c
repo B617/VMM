@@ -482,9 +482,7 @@ int main(int argc, char* argv[])
 	/* 在循环中模拟访存请求与处理过程 */
 	while (TRUE)
 	{
-		do_request();
-		do_response();
-		printf("按Y打印页表，按V打印辅存,按A打印实存,按其他键不打印...\n");
+		printf("按Y打印页表，按V打印辅存,按A打印实存,按N产生新请求,按X退出程序...\n");
 		c=getchar();
 		if (c == 'y' || c == 'Y')
 			do_print_info();
@@ -492,14 +490,13 @@ int main(int argc, char* argv[])
 			do_print_auxMem();
 		else if(c == 'a' || c == 'A')
 			do_print_actMem();
-		while (c != '\n')
-			c = getchar();
-		printf("按X退出程序，按其他键继续...\n");
-		if ((c = getchar()) == 'x' || c == 'X')
+		else if(c == 'n' || c == 'N'){
+			do_request();
+			do_response();
+		}
+		else if(c == 'x' || c == 'X')
 			break;
-		while (c != '\n')
-			c = getchar();
-		//sleep(5000);
+		while((c=getchar())!='\n');
 	}
 
 	if (fclose(ptr_auxMem) == EOF)
