@@ -3,6 +3,8 @@
 #include <time.h>
 #include "vmm.h"
 
+//#define WRITE
+
 /* 页表 */
 PageTableItem pageTable[PAGE_SUM];
 /* 实存空间 */
@@ -159,7 +161,13 @@ void do_response()
 				return;
 			}
 			/* 向实存中写入请求的内容 */
+			#ifdef WRITE
+				do_print_actMem();
+			#endif
 			actMem[actAddr] = ptr_memAccReq->value;
+			#ifdef WRITE
+				do_print_actMem();
+			#endif
 			ptr_pageTabIt->edited = TRUE;			
 			printf("写操作成功\n");
 			break;
@@ -377,6 +385,7 @@ void do_request()
 			ptr_memAccReq->reqType = REQUEST_WRITE;
 			/* 随机产生待写入的值 */
 			ptr_memAccReq->value = random() % 0xFFu;
+//			printf("%c\n",ptr_memAccReq->value);
 			printf("产生请求：\n地址：%u\t类型：写入\t值：%02X\n", ptr_memAccReq->virAddr, ptr_memAccReq->value);
 			break;
 		}
@@ -426,7 +435,7 @@ void do_print_auxMem()
 	{
 		printf("%d\t",i);
 		for(j=0;j<PAGE_SIZE;j++){
-			printf("%c",temp[k++]);
+			printf("%02x ",temp[k++]);
 		}
 		printf("\n");
 	}
@@ -439,8 +448,9 @@ void do_print_actMem()
 	printf("页号\t内容\t\n");
 	for(i=0,k=0;i<BLOCK_SUM;i++){
 		printf("%d\t",i);
-		for(j=0;j<PAGE_SIZE;j++){
-			printf("%c",actMem[k++]);
+		if(blockStatus[i]==TRUE){
+			for(j=0;j<PAGE_SIZE;j++)		
+				printf("%02x ",actMem[k++]);
 		}
 		printf("\n");
 	}
