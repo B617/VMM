@@ -24,6 +24,8 @@
 #define SUB_PAGE_SUM (PAGE_SUM / ROOT_PAGE_SUM)
 /* 总物理块数 */
 #define BLOCK_SUM (ACTUAL_MEMORY_SIZE / PAGE_SIZE)
+/* 总进程数 */
+#define PROCESS_SUM 4
 
 
 /* 可读标识位 */
@@ -54,6 +56,7 @@ typedef struct
 	BOOL edited; //页面修改标识
 	unsigned long auxAddr; //外存地址
 	unsigned long count; //页面使用计数器
+	unsigned int processNum; //进程号
 } PageTableItem, *Ptr_PageTableItem;
 
 /* 访存请求类型 */
@@ -69,6 +72,7 @@ typedef struct
 	MemoryAccessRequestType reqType; //访存请求类型
 	unsigned long virAddr; //虚地址
 	BYTE value; //写请求的值
+	unsigned int processNum; //进程号
 } MemoryAccessRequest, *Ptr_MemoryAccessRequest;
 
 
@@ -83,7 +87,9 @@ typedef enum {
 	ERROR_FILE_CLOSE_FAILED, //文件关闭失败
 	ERROR_FILE_SEEK_FAILED, //文件指针定位失败
 	ERROR_FILE_READ_FAILED, //文件读取失败
-	ERROR_FILE_WRITE_FAILED //文件写入失败
+	ERROR_FILE_WRITE_FAILED, //文件写入失败
+	ERROR_PROCESS_NOT_FOUND, //进程不存在
+	ERROR_PROCESS_PROTECTED //进程访问受限
 } ERROR_CODE;
 
 /* 产生访存请求 */

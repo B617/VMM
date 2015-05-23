@@ -34,6 +34,7 @@ void do_init()
 			pageTable[i][j].filled = FALSE;
 			pageTable[i][j].edited = FALSE;
 			pageTable[i][j].count = 0;
+			pageTable[i][j].processNum = random() % PROCESS_SUM;
 			/* 使用随机数设置该页的保护类型 */
 			switch (random() % 7)
 			{
@@ -129,6 +130,13 @@ void do_response()
 		return;
 	}
 	
+	/* 检查进程是否存在 */
+	if (ptr_memAccReq->processNum < 0 || ptr_memAccReq->processNum >= PROCESS_SUM)
+	{
+		do_error(ERROR_PROCESS_NOT_FOUND);
+		return;
+	}
+	
 	/* 计算页号和页内偏移值 */
 	temp = PAGE_SIZE * SUB_PAGE_SUM;
 	rootPageNum = ptr_memAccReq->virAddr / temp;
@@ -138,6 +146,13 @@ void do_response()
 
 	/* 获取对应页表项 */
 	ptr_pageTabIt = &pageTable[rootPageNum][subPageNum];
+
+	/* 检查进程是否匹配 */
+	if (ptr_memAccReq->processNum != ptr_pageTabIt->processNum)
+	{
+		do_error(ERROR_PROCESS_PROTECTED);
+		return ;
+	}
 	
 	/* 根据特征位决定是否产生缺页中断 */
 	if (!ptr_pageTabIt->filled)
@@ -374,6 +389,16 @@ void do_error(ERROR_CODE code)
 			printf("系统错误：写入文件失败\n");
 			break;
 		}
+		case ERROR_PROCESS_NOT_FOUND:
+		{
+			printf("系统错误：进程不存在\n");
+			break;
+		}
+		case ERROR_PROCESS_PROTECTED:
+		{
+			printf("系统错误：进程访问受限\n");
+			break;
+		}
 		default:
 		{
 			printf("未知错误：没有这个错误代码\n");
@@ -386,13 +411,16 @@ void do_request()
 {
 	/* 随机产生请求地址 */
 	ptr_memAccReq->virAddr = random() % VIRTUAL_MEMORY_SIZE;
+	/* 随机产生请求进程号 */
+	ptr_memAccReq->processNum = random() % PROCESS_SUM;
 	/* 随机产生请求类型 */
 	switch (random() % 3)
 	{
 		case 0: //读请求
 		{
 			ptr_memAccReq->reqType = REQUEST_READ;
-			printf("产生请求：\n地址：%u\t类型：读取\n", ptr_memAccReq->virAddr);
+			printf("产生请求：\n进程号：%u\t地址：%u\t类型：读取\n", 
+					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
 			break;
 		}
 		case 1: //写请求
@@ -401,13 +429,15 @@ void do_request()
 			/* 随机产生待写入的值 */
 			ptr_memAccReq->value = random() % 0xFFu;
 //			printf("%c\n",ptr_memAccReq->value);
-			printf("产生请求：\n地址：%u\t类型：写入\t值：%02X\n", ptr_memAccReq->virAddr, ptr_memAccReq->value);
+			printf("产生请求：\n进程号：%u\t地址：%u\t类型：写入\t值：%02X\n",
+					ptr_memAccReq->processNum, ptr_memAccReq->virAddr, ptr_memAccReq->value);
 			break;
 		}
 		case 2:
 		{
 			ptr_memAccReq->reqType = REQUEST_EXECUTE;
-			printf("产生请求：\n地址：%u\t类型：执行\n", ptr_memAccReq->virAddr);
+			printf("产生请求：\n进程号：%u\t地址：%u\t类型：执行\n", 
+					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
 			break;
 		}
 		default:
@@ -421,18 +451,23 @@ void create_request()
 	unsigned long addr;
 	int type;
 	BYTE value;
-	printf("请输入请求地址[0,%u)...\n",VIRTUAL_MEMORY_SIZE);
+
 	/* 产生请求地址 */
+	printf("请输入请求地址[0,%u)...\n",VIRTUAL_MEMORY_SIZE);
 	scanf("%u",&ptr_memAccReq->virAddr);
+	/* 产生请求进程号 */
+	printf("请输入请求进程号[0,%u)...\n",PROCESS_SUM);
+	scanf("%d",&ptr_memAccReq->processNum);
 	/* 产生请求类型 */
-	printf("请输入请求类型,0:read  1:write  2:execute\n");
+	printf("请输入请求类型(0:read\t1:write\t2:execute)...\n");
 	scanf("%d",&type);
 	switch (type%3)
 	{
 		case 0: //读请求
 		{
 			ptr_memAccReq->reqType = REQUEST_READ;
-			printf("产生请求：\n地址：%u\t类型：读取\n", ptr_memAccReq->virAddr);
+			printf("产生请求：\n进程号：%u\t地址：%u\t类型：读取\n", 
+					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
 			break;
 		}
 		case 1: //写请求
@@ -441,13 +476,15 @@ void create_request()
 			/* 产生待写入的值 */
 			printf("请输入待写入的值...\n");
 			scanf("%02x",&ptr_memAccReq->value);
-			printf("产生请求：\n地址：%u\t类型：写入\t值：%02X\n", ptr_memAccReq->virAddr, ptr_memAccReq->value);
+			printf("产生请求：\n进程号：%u\t地址：%u\t类型：写入\t值：%02X\n",
+					ptr_memAccReq->processNum, ptr_memAccReq->virAddr, ptr_memAccReq->value);
 			break;
 		}
 		case 2:
 		{
 			ptr_memAccReq->reqType = REQUEST_EXECUTE;
-			printf("产生请求：\n地址：%u\t类型：执行\n", ptr_memAccReq->virAddr);
+			printf("产生请求：\n进程号：%u\t地址：%u\t类型：执行\n", 
+					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
 			break;
 		}
 		default:
@@ -460,13 +497,13 @@ void do_print_info()
 {
 	unsigned int i, j;
 	char str[4];
-	printf("1级页号\t2级页号\t块号\t装入\t修改\t保护\t计数\t辅存\n");
+	printf("1级页号\t2级页号\t进程号\t块号\t装入\t修改\t保护\t计数\t辅存\n");
 	for (i = 0; i < ROOT_PAGE_SUM; i++)
 	{
 		for(j = 0; j < SUB_PAGE_SUM; j++)
 		{
-			printf("%u\t%u\t%u\t%u\t%u\t%s\t%u\t%u\n", i, j, pageTable[i][j].blockNum, pageTable[i][j].filled, 
-				pageTable[i][j].edited, get_proType_str(str, pageTable[i][j].proType), 
+			printf("%u\t%u\t%u\t%u\t%u\t%u\t%s\t%u\t%u\n", i, j, pageTable[i][j].processNum, pageTable[i][j].blockNum, 
+				pageTable[i][j].filled, pageTable[i][j].edited, get_proType_str(str, pageTable[i][j].proType), 
 				pageTable[i][j].count, pageTable[i][j].auxAddr);
 		}
 	}
@@ -488,12 +525,12 @@ void do_print_auxMem()
 		do_error(ERROR_FILE_READ_FAILED);
 		exit(1);
 	}
-	printf("1级页号\t2级页号\t内容\t\n");
+	printf("1级页号\t2级页号\t辅存\t内容\t\n");
 	for(i=0,k=0;i<ROOT_PAGE_SUM;i++)
 	{
 		for(p=0;p<SUB_PAGE_SUM;p++)
 		{
-			printf("%d\t%d\t",i,p);
+			printf("%d\t%d\t%d\t",i,p,k);
 			for(j=0;j<PAGE_SIZE;j++){
 				printf("%02x ",temp[k++]);
 			}
