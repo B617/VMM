@@ -29,7 +29,7 @@
 /* 总物理块数 */
 #define BLOCK_SUM (ACTUAL_MEMORY_SIZE / PAGE_SIZE)
 /* 总进程数 */
-#define PROCESS_SUM 4
+#define PROCESS_SUM 2
 
 
 /* 可读标识位 */
@@ -87,6 +87,12 @@ typedef struct
 } CMD;
 
 #define DATALEN sizeof(CMD)
+
+/* LRU */
+typedef struct node{
+	int blockNum;
+	struct node *next;
+}Node,*ptrNode;
 
 /* 访存错误代码 */
 typedef enum {
@@ -146,5 +152,11 @@ char *get_proType_str(char *, BYTE);
 
 /* 初始化文件 */
 void initFile();
+
+/* LRU */
+void LRU_add(int num);
+void LRU_touch(int num);
+unsigned int LRU_pop();
+void LRU_show();
 
 #endif

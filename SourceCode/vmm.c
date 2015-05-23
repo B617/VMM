@@ -5,6 +5,7 @@
 #include "vmm.h"
 
 //#define WRITE
+#define LRUSHOW
 
 /* 页表 */
 //PageTableItem pageTable[PAGE_SUM];
@@ -20,6 +21,8 @@ BOOL blockStatus[BLOCK_SUM];
 Ptr_MemoryAccessRequest ptr_memAccReq;
 /* FIFO */
 int fifo;
+/* LRU */
+ptrNode head=NULL;
 
 extern int errno;
 
@@ -95,6 +98,7 @@ void do_init()
 			pageTable[i][j].blockNum = k;
 			pageTable[i][j].filled = TRUE;
 			blockStatus[k] = TRUE;
+			LRU_add(k);
 		}
 		else
 			blockStatus[k] = FALSE;
@@ -149,6 +153,19 @@ void do_response()
 
 	/* 获取对应页表项 */
 	ptr_pageTabIt = &pageTable[rootPageNum][subPageNum];
+	
+	/* 根据特征位决定是否产生缺页中断 */
+	if (!ptr_pageTabIt->filled)
+	{
+		do_page_fault(ptr_pageTabIt);
+	}
+	else
+		LRU_touch(ptr_pageTabIt->blockNum);
+
+	ptr_pageTabIt->count++;
+	
+	actAddr = ptr_pageTabIt->blockNum * PAGE_SIZE + offAddr;
+	printf("实地址为：%u\n", actAddr);
 
 	/* 检查进程是否匹配 */
 	if (ptr_memAccReq->processNum != ptr_pageTabIt->processNum)
@@ -157,21 +174,11 @@ void do_response()
 		return ;
 	}
 	
-	/* 根据特征位决定是否产生缺页中断 */
-	if (!ptr_pageTabIt->filled)
-	{
-		do_page_fault(ptr_pageTabIt);
-	}
-	
-	actAddr = ptr_pageTabIt->blockNum * PAGE_SIZE + offAddr;
-	printf("实地址为：%u\n", actAddr);
-	
 	/* 检查页面访问权限并处理访存请求 */
 	switch (ptr_memAccReq->reqType)
 	{
 		case REQUEST_READ: //读请求
 		{
-			ptr_pageTabIt->count++;
 			if (!(ptr_pageTabIt->proType & READABLE)) //页面不可读
 			{
 				do_error(ERROR_READ_DENY);
@@ -183,7 +190,6 @@ void do_response()
 		}
 		case REQUEST_WRITE: //写请求
 		{
-			ptr_pageTabIt->count++;
 			if (!(ptr_pageTabIt->proType & WRITABLE)) //页面不可写
 			{
 				do_error(ERROR_WRITE_DENY);	
@@ -203,7 +209,6 @@ void do_response()
 		}
 		case REQUEST_EXECUTE: //执行请求
 		{
-			ptr_pageTabIt->count++;
 			if (!(ptr_pageTabIt->proType & EXECUTABLE)) //页面不可执行
 			{
 				do_error(ERROR_EXECUTE_DENY);
@@ -237,13 +242,15 @@ void do_page_fault(Ptr_PageTableItem ptr_pageTabIt)
 			ptr_pageTabIt->filled = TRUE;
 			ptr_pageTabIt->edited = FALSE;
 			ptr_pageTabIt->count = 0;
+			LRU_add(i);
 			
 			blockStatus[i] = TRUE;
+//			printf("choose %d\n",i);
 			return;
 		}
 	}
 	/* 没有空闲物理块，进行页面替换 */
-	do_LFU(ptr_pageTabIt);
+	do_LRU(ptr_pageTabIt);
 }
 
 /* 根据LFU算法进行页面替换 */
@@ -282,6 +289,102 @@ void do_LFU(Ptr_PageTableItem ptr_pageTabIt)
 	ptr_pageTabIt->filled = TRUE;
 	ptr_pageTabIt->edited = FALSE;
 	ptr_pageTabIt->count = 0;
+	printf("页面替换成功\n");
+}
+
+/* LRU */
+void LRU_add(int num){
+	ptrNode p,r=head;
+	p=(ptrNode)malloc(sizeof(Node));
+	p->blockNum=num;
+	p->next=NULL;
+	if(head==NULL)
+		head=p;
+	else{
+		while(r->next!=NULL)
+			r=r->next;
+		r->next=p;
+	}
+	#ifdef LRUSHOW
+		LRU_show();
+	#endif
+}
+
+void LRU_touch(int num){
+	ptrNode p=head,pre=head;
+	while(p->blockNum!=num){
+		pre=p;
+		p=p->next;
+	}
+	if(p==head)
+		head=head->next;
+	else
+		pre->next=p->next;
+	free(p);
+	LRU_add(num);
+	#ifdef LRUSHOW
+		LRU_show();
+	#endif
+}
+
+unsigned int LRU_pop(){
+	ptrNode p=head;
+	int num=head->blockNum;
+	head=head->next;
+	free(p);
+	#ifdef LRUSHOW
+		LRU_show();
+	#endif
+	return num;
+}
+
+void LRU_show(){
+	ptrNode p=head;
+	while(p!=NULL){
+		printf("%d ",p->blockNum);
+		p=p->next;
+	}
+	printf("\n");
+}
+
+/* 根据LRU算法进行页面替换 */
+void do_LRU(Ptr_PageTableItem ptr_pageTabIt)
+{
+	unsigned int i, j, page_i, page_j, blockNum;
+	printf("没有空闲物理块，开始进行LRU页面替换...\n");
+	blockNum=LRU_pop();
+	for (i = 0, page_i = 0, page_j = 0; i < ROOT_PAGE_SUM; i++)
+	{
+		for(j = 0; j < SUB_PAGE_SUM; j++)
+		{
+			if (pageTable[i][j].filled=TRUE && pageTable[i][j].blockNum==blockNum)
+			{
+				page_i = i;
+				page_j = j;
+				break;
+			}
+		}
+	}
+	printf("选择一级页表第%u项,二级页表第%u项进行替换\n", page_i, page_j);
+	if (pageTable[page_i][page_j].edited)
+	{
+		/* 页面内容有修改，需要写回至辅存 */
+		printf("该页内容有修改，写回至辅存\n");
+		do_page_out(&pageTable[page_i][page_j]);
+	}
+	pageTable[page_i][page_j].filled = FALSE;
+	pageTable[page_i][page_j].count = 0;
+
+
+	/* 读辅存内容，写入到实存 */
+	do_page_in(ptr_pageTabIt, pageTable[page_i][page_j].blockNum);
+	
+	/* 更新页表内容 */
+	ptr_pageTabIt->blockNum = pageTable[page_i][page_j].blockNum;
+	ptr_pageTabIt->filled = TRUE;
+	ptr_pageTabIt->edited = FALSE;
+	ptr_pageTabIt->count = 0;
+	LRU_add(blockNum);
 	printf("页面替换成功\n");
 }
 
@@ -394,12 +497,12 @@ void do_error(ERROR_CODE code)
 		}
 		case ERROR_PROCESS_NOT_FOUND:
 		{
-			printf("系统错误：进程不存在\n");
+			printf("进程错误：进程不存在\n");
 			break;
 		}
 		case ERROR_PROCESS_PROTECTED:
 		{
-			printf("系统错误：进程访问受限\n");
+			printf("进程错误：进程访问受限\n");
 			break;
 		}
 		case ERROR_FIFO_REMOVE_FAILED:
