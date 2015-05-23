@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <errno.h>
 #include "vmm.h"
 
 //#define WRITE
@@ -17,8 +18,10 @@ FILE *ptr_auxMem;
 BOOL blockStatus[BLOCK_SUM];
 /* 访存请求 */
 Ptr_MemoryAccessRequest ptr_memAccReq;
+/* FIFO */
+int fifo;
 
-
+extern int errno;
 
 /* 初始化环境 */
 void do_init()
@@ -399,97 +402,31 @@ void do_error(ERROR_CODE code)
 			printf("系统错误：进程访问受限\n");
 			break;
 		}
+		case ERROR_FIFO_REMOVE_FAILED:
+		{
+			printf("fifo文件删除失败\n");
+			break;
+		}
+		case ERROR_FIFO_MAKE_FAILED:
+		{
+			printf("fifo文件创建失败\n");
+			break;
+		}
+		case ERROR_FIFO_OPEN_FAILED:
+		{
+			printf("fifo文件打开失败\n");
+			break;
+		}
+		case ERROR_FIFO_READ_FAILED:
+		{
+			printf("fifo文件读取失败\n");
+			break;
+		}
 		default:
 		{
 			printf("未知错误：没有这个错误代码\n");
 		}
 	}
-}
-
-/* 产生访存请求 */
-void do_request()
-{
-	/* 随机产生请求地址 */
-	ptr_memAccReq->virAddr = random() % VIRTUAL_MEMORY_SIZE;
-	/* 随机产生请求进程号 */
-	ptr_memAccReq->processNum = random() % PROCESS_SUM;
-	/* 随机产生请求类型 */
-	switch (random() % 3)
-	{
-		case 0: //读请求
-		{
-			ptr_memAccReq->reqType = REQUEST_READ;
-			printf("产生请求：\n进程号：%u\t地址：%u\t类型：读取\n", 
-					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
-			break;
-		}
-		case 1: //写请求
-		{
-			ptr_memAccReq->reqType = REQUEST_WRITE;
-			/* 随机产生待写入的值 */
-			ptr_memAccReq->value = random() % 0xFFu;
-//			printf("%c\n",ptr_memAccReq->value);
-			printf("产生请求：\n进程号：%u\t地址：%u\t类型：写入\t值：%02X\n",
-					ptr_memAccReq->processNum, ptr_memAccReq->virAddr, ptr_memAccReq->value);
-			break;
-		}
-		case 2:
-		{
-			ptr_memAccReq->reqType = REQUEST_EXECUTE;
-			printf("产生请求：\n进程号：%u\t地址：%u\t类型：执行\n", 
-					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
-			break;
-		}
-		default:
-			break;
-	}	
-}
-
-/* 手动产生访存请求 */
-void create_request()
-{
-	unsigned long addr;
-	int type;
-	BYTE value;
-
-	/* 产生请求地址 */
-	printf("请输入请求地址[0,%u)...\n",VIRTUAL_MEMORY_SIZE);
-	scanf("%u",&ptr_memAccReq->virAddr);
-	/* 产生请求进程号 */
-	printf("请输入请求进程号[0,%u)...\n",PROCESS_SUM);
-	scanf("%d",&ptr_memAccReq->processNum);
-	/* 产生请求类型 */
-	printf("请输入请求类型(0:read\t1:write\t2:execute)...\n");
-	scanf("%d",&type);
-	switch (type%3)
-	{
-		case 0: //读请求
-		{
-			ptr_memAccReq->reqType = REQUEST_READ;
-			printf("产生请求：\n进程号：%u\t地址：%u\t类型：读取\n", 
-					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
-			break;
-		}
-		case 1: //写请求
-		{
-			ptr_memAccReq->reqType = REQUEST_WRITE;
-			/* 产生待写入的值 */
-			printf("请输入待写入的值...\n");
-			scanf("%02x",&ptr_memAccReq->value);
-			printf("产生请求：\n进程号：%u\t地址：%u\t类型：写入\t值：%02X\n",
-					ptr_memAccReq->processNum, ptr_memAccReq->virAddr, ptr_memAccReq->value);
-			break;
-		}
-		case 2:
-		{
-			ptr_memAccReq->reqType = REQUEST_EXECUTE;
-			printf("产生请求：\n进程号：%u\t地址：%u\t类型：执行\n", 
-					ptr_memAccReq->processNum, ptr_memAccReq->virAddr);
-			break;
-		}
-		default:
-			break;
-	}	
 }
 
 /* 打印页表 */
@@ -576,7 +513,9 @@ char *get_proType_str(char *str, BYTE type)
 int main(int argc, char* argv[])
 {
 	char c;
-	int i;
+	int i,count;
+	CMD cmd;
+	struct stat statbuf;
 	
 	initFile();
 	if (!(ptr_auxMem = fopen(AUXILIARY_MEMORY, "r+")))
@@ -587,11 +526,45 @@ int main(int argc, char* argv[])
 	do_init();
 	do_print_info();
 	ptr_memAccReq = (Ptr_MemoryAccessRequest) malloc(sizeof(MemoryAccessRequest));
-	/* 在循环中模拟访存请求与处理过程 */
-	while (TRUE)
+
+	if(stat("/tmp/server",&statbuf)==0)//通过文件名获取文件信息，并保存在statbuf结构体中
 	{
-		printf("按Y打印页表，按V打印辅存,按A打印实存\n按C手动产生请求,按N随机产生新请求,按X退出程序...\n");
-		c=getchar();
+		/* 如果FIFO文件存在,删掉 */
+		if(remove("/tmp/server")<0)
+		{
+			do_error(ERROR_FIFO_REMOVE_FAILED);
+			exit(1);
+		}
+	}
+
+	if(mkfifo("/tmp/server",0666)<0)//mkfifo ()会依参数pathname建立特殊的FIFO文件，该文件必须不存在，而参数mode为该文件的权限
+	{
+		do_error(ERROR_FIFO_MAKE_FAILED);
+		exit(1);
+	}
+	/* 在阻塞模式下打开FIFO */
+//|O_NONBLOCK
+	if((fifo=open("/tmp/server",O_RDONLY))<0)
+	{
+		do_error(ERROR_FIFO_OPEN_FAILED );
+		exit(1);
+	}
+
+	while(TRUE)
+	{
+		bzero(&cmd,DATALEN);
+//		sleep(5);
+		if((count=read(fifo,&cmd,DATALEN))<0)
+		{
+			do_error(ERROR_FIFO_READ_FAILED);
+			printf("errno=%d\n",errno);
+			exit(1);
+		}
+		if(count==0)
+		{
+			continue;
+		}
+		c=cmd.c;
 		if (c == 'y' || c == 'Y')
 			do_print_info();
 		else if(c == 'v' || c == 'V')
@@ -599,16 +572,17 @@ int main(int argc, char* argv[])
 		else if(c == 'a' || c == 'A')
 			do_print_actMem();
 		else if(c == 'n' || c == 'N'){
-			do_request();
+			ptr_memAccReq=&(cmd.request);
 			do_response();
 		}
 		else if(c == 'c' || c == 'C'){
-			create_request();
+			ptr_memAccReq=&(cmd.request);
 			do_response();
 		}
 		else if(c == 'x' || c == 'X')
 			break;
-		while((c=getchar())!='\n');
+//		sleep(1);
+//		printf("sleep over\n");
 	}
 
 	if (fclose(ptr_auxMem) == EOF)
@@ -616,5 +590,6 @@ int main(int argc, char* argv[])
 		do_error(ERROR_FILE_CLOSE_FAILED);
 		exit(1);
 	}
+	close(fifo);
 	return (0);
 }

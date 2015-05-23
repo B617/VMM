@@ -1,3 +1,7 @@
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<fcntl.h>
+
 #ifndef VMM_H
 #define VMM_H
 
@@ -75,6 +79,14 @@ typedef struct
 	unsigned int processNum; //进程号
 } MemoryAccessRequest, *Ptr_MemoryAccessRequest;
 
+/* 指令 */
+typedef struct
+{
+	char c;
+	MemoryAccessRequest request;
+} CMD;
+
+#define DATALEN sizeof(CMD)
 
 /* 访存错误代码 */
 typedef enum {
@@ -89,7 +101,11 @@ typedef enum {
 	ERROR_FILE_READ_FAILED, //文件读取失败
 	ERROR_FILE_WRITE_FAILED, //文件写入失败
 	ERROR_PROCESS_NOT_FOUND, //进程不存在
-	ERROR_PROCESS_PROTECTED //进程访问受限
+	ERROR_PROCESS_PROTECTED, //进程访问受限
+	ERROR_FIFO_REMOVE_FAILED, //fifo文件删除失败
+	ERROR_FIFO_MAKE_FAILED, //fifo文件创建失败
+	ERROR_FIFO_OPEN_FAILED, //fifo文件打开失败
+	ERROR_FIFO_READ_FAILED //fifo文件读取失败
 } ERROR_CODE;
 
 /* 产生访存请求 */
