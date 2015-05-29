@@ -5,7 +5,7 @@
 #include "vmm.h"
 
 //#define WRITE
-#define LRUSHOW
+//#define LRUSHOW
 
 /* 页表 */
 //PageTableItem pageTable[PAGE_SUM];
@@ -99,6 +99,7 @@ void do_init()
 			pageTable[i][j].filled = TRUE;
 			blockStatus[k] = TRUE;
 			LRU_add(k);
+//			do_print_actMem();
 		}
 		else
 			blockStatus[k] = FALSE;
@@ -412,6 +413,8 @@ void do_page_in(Ptr_PageTableItem ptr_pageTabIt, unsigned int blockNum)
 		exit(1);
 	}
 	printf("调页成功：辅存地址%u-->>物理块%u\n", ptr_pageTabIt->auxAddr, blockNum);
+//	printf("v-value=%0x\n",ptr_auxMem[ptr_pageTabIt->auxAddr]);
+//	printf("a-value=%0x\n",actMem[blockNum*PAGE_SIZE]);
 }
 
 /* 将被替换页面的内容写回辅存 */
@@ -583,13 +586,15 @@ void do_print_auxMem()
 void do_print_actMem()
 {
 	int i,j,k;
-	printf("页号\t内容\t\n");
+	printf("块号\t内容\t\n");
 	for(i=0,k=0;i<BLOCK_SUM;i++){
 		printf("%d\t",i);
 		if(blockStatus[i]==TRUE){
 			for(j=0;j<PAGE_SIZE;j++)		
 				printf("%02x ",actMem[k++]);
 		}
+		else
+			k+=4;
 		printf("\n");
 	}
 }
@@ -628,6 +633,7 @@ int main(int argc, char* argv[])
 	}
 	do_init();
 	do_print_info();
+//	do_print_auxMem();
 	ptr_memAccReq = (Ptr_MemoryAccessRequest) malloc(sizeof(MemoryAccessRequest));
 
 	if(stat("/tmp/server",&statbuf)==0)//通过文件名获取文件信息，并保存在statbuf结构体中
